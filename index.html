@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Algebra Placement — Grader</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --paper:#f4f1e8;
+    --paper-line:#e8e2d0;
+    --red:#c8372d;
+    --muted:#7a7368;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Fraunces',Georgia,serif;
+    background:var(--paper);
+    background-image:repeating-linear-gradient(0deg,transparent,transparent 31px,var(--paper-line) 31px,var(--paper-line) 32px);
+    color:var(--ink);
+    min-height:100vh;
+    padding:40px 20px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .sheet{
+    max-width:680px;
+    width:100%;
+    background:var(--paper);
+    border:2px solid var(--ink);
+    box-shadow:8px 8px 0 var(--ink);
+    padding:40px;
+  }
+  header{
+    border-bottom:3px double var(--ink);
+    padding-bottom:18px;
+    margin-bottom:28px;
+  }
+  h1{
+    font-size:42px;
+    font-weight:800;
+    letter-spacing:-1.5px;
+    line-height:.95;
+  }
+  .sub{
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:3px;
+    color:var(--muted);
+    margin-top:6px;
+  }
+  p{font-size:15px;line-height:1.6;margin-bottom:16px}
+  .cards{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:16px;
+    margin:24px 0;
+  }
+  .card{
+    display:block;
+    padding:24px;
+    border:2px solid var(--ink);
+    background:white;
+    text-decoration:none;
+    color:var(--ink);
+    transition:all .15s;
+  }
+  .card:hover{
+    background:var(--ink);
+    color:var(--paper);
+    transform:translate(-2px,-2px);
+    box-shadow:4px 4px 0 var(--red);
+  }
+  .card .num{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    letter-spacing:2px;
+    color:var(--muted);
+  }
+  .card:hover .num{color:var(--paper)}
+  .card h2{
+    font-size:22px;
+    font-weight:800;
+    margin:6px 0 8px;
+    letter-spacing:-0.5px;
+  }
+  .card .desc{font-size:13px;line-height:1.5}
+  .workflow{
+    margin-top:24px;
+    padding:18px;
+    background:#eee6d0;
+    border:1px solid var(--ink);
+    font-size:14px;
+  }
+  .workflow strong{font-weight:800}
+  .workflow ol{padding-left:20px;margin-top:8px}
+  .workflow li{margin-bottom:6px}
+  @media (max-width:560px){
+    .cards{grid-template-columns:1fr}
+    h1{font-size:32px}
+    .sheet{padding:28px 20px}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+  <header>
+    <h1>ALGEBRA PLACEMENT</h1>
+    <div class="sub">Test Grader · 25 Questions</div>
+  </header>
+
+  <p>A two-part system for grading 25-question multiple-choice placement tests: a printable bubble sheet for students, and a camera-based scanner that grades a stack of completed sheets in your browser.</p>
+
+  <div class="cards">
+    <a class="card" href="answer-sheet-printable.html">
+      <div class="num">STEP 1</div>
+      <h2>Printable Sheet →</h2>
+      <div class="desc">Print one per student. Has the corner markers the scanner needs.</div>
+    </a>
+    <a class="card" href="bubble-scanner.html">
+      <div class="num">STEP 2</div>
+      <h2>Scanner →</h2>
+      <div class="desc">Set the answer key, photograph completed sheets, grade in batch, export CSV.</div>
+    </a>
+  </div>
+
+  <div class="workflow">
+    <strong>Quick start:</strong>
+    <ol>
+      <li>Open the <em>Printable Sheet</em> and print one copy per student.</li>
+      <li>Students fill in answers with a #2 pencil or dark pen.</li>
+      <li>Open the <em>Scanner</em>, set the answer key, then add photos.</li>
+      <li>Hit "Process All", review any failed scans, export CSV.</li>
+    </ol>
+  </div>
+</div>
+</body>
+</html>
