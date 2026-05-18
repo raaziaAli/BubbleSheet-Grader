@@ -375,7 +375,12 @@
       <input type="text" id="reviewName" style="font-family:'JetBrains Mono',monospace;font-size:14px;padding:6px;width:300px;border:1px solid var(--ink);margin-left:8px">
     </div>
     <div class="review-grid">
-      <div><canvas id="reviewCanvas"></canvas></div>
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:4px">Warped page · detected bubbles</div>
+        <canvas id="reviewCanvas"></canvas>
+        <div id="cornerDiagLabel" style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:14px 0 4px;display:none">Original photo · what was picked as corners (TL/TR/BL/BR)</div>
+        <canvas id="cornerDiagCanvas" style="display:none;max-width:100%;border:1px solid var(--ink)"></canvas>
+      </div>
       <div class="review-answers" id="reviewAnswers"></div>
     </div>
     <div style="margin-top:16px;display:flex;gap:10px">
@@ -686,6 +691,28 @@
       throw new Error('Marker arrangement does not match expected layout');
     }
 
+    // === DIAGNOSTIC: draw what we detected onto the ORIGINAL photo ===
+    // This shows you exactly what the algorithm "saw" as the 4 corner markers.
+    // If these don't land on the four black squares, corner detection is broken.
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = w; origCanvas.height = h;
+    const octx = origCanvas.getContext('2d');
+    octx.drawImage(img, 0, 0, w, h);
+    // Outline all candidate contours in faint blue
+    octx.strokeStyle = 'rgba(45,74,124,0.5)';
+    octx.lineWidth = 2;
+    candidates.forEach(c => octx.strokeRect(c.rect.x, c.rect.y, c.rect.width, c.rect.height));
+    // Highlight the 4 chosen corners in red, with labels
+    octx.lineWidth = 4;
+    octx.strokeStyle = '#c8372d';
+    octx.fillStyle = '#c8372d';
+    octx.font = 'bold 20px monospace';
+    [['TL', corners.tl], ['TR', corners.tr], ['BL', corners.bl], ['BR', corners.br]].forEach(([label, c]) => {
+      octx.strokeRect(c.rect.x, c.rect.y, c.rect.width, c.rect.height);
+      octx.fillText(label, c.rect.x + c.rect.width + 4, c.rect.y + 18);
+    });
+    const cornerDiagUrl = origCanvas.toDataURL('image/jpeg', 0.85);
+
     // Warp to a canonical 800x1000 page (matches our printable proportions roughly)
     const TW = 800, TH = 1000;
     const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
@@ -777,6 +804,7 @@
 
     // Attach debug to most recent sheet — caller will handle
     answers.__debug = debugUrl;
+    answers.__cornerDiag = cornerDiagUrl;
     answers.__fills = debugBubbles.map(d => d.fills.map(f => f.fill));
     return answers;
   }
@@ -852,6 +880,23 @@
       ctx.drawImage(img, 0, 0);
     };
     img.src = (sh.detected && sh.detected.__debug) || sh.imageData;
+
+    // Show the corner-detection diagnostic in a second canvas if available
+    const diag = document.getElementById('cornerDiagCanvas');
+    if (sh.detected && sh.detected.__cornerDiag) {
+      const dimg = new Image();
+      dimg.onload = () => {
+        diag.width = dimg.width;
+        diag.height = dimg.height;
+        diag.getContext('2d').drawImage(dimg, 0, 0);
+        diag.style.display = 'block';
+        document.getElementById('cornerDiagLabel').style.display = 'block';
+      };
+      dimg.src = sh.detected.__cornerDiag;
+    } else {
+      diag.style.display = 'none';
+      document.getElementById('cornerDiagLabel').style.display = 'none';
+    }
 
     renderReviewAnswers(sh);
     document.getElementById('reviewModal').classList.add('show');
