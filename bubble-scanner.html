@@ -331,8 +331,8 @@
       </label>
       <div class="threshold">
         Darkness threshold:
-        <input type="range" id="threshold" min="0.10" max="0.80" step="0.02" value="0.40">
-        <span id="thresholdVal">0.40</span>
+        <input type="range" id="threshold" min="0.10" max="0.80" step="0.02" value="0.30">
+        <span id="thresholdVal">0.30</span>
       </div>
     </div>
     <div class="scan-queue" id="scanQueue">
@@ -392,6 +392,12 @@
 
 <canvas id="processCanvas"></canvas>
 
+<!-- heic2any: converts iPhone HEIC photos to JPEG in the browser.
+     iPhones save photos as HEIC but name them .jpg/.jpeg — the browser
+     can't decode HEIC natively, so without this library, iPhone uploads
+     silently fail. -->
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+
 <script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCVReady()" onerror="onOpenCVError()"></script>
 
 <script>
@@ -418,7 +424,7 @@
   let sheets = []; // {id, name, imageData, detected:[letter|null], score, status}
   let cvReady = false;
   let reviewingId = null;
-  let darknessThreshold = 0.40;
+  let darknessThreshold = 0.30;
   let debugMode = false;
 
   // ============== OPENCV LOAD ==============
@@ -492,7 +498,28 @@
   document.getElementById('fileInput').addEventListener('change', async (e) => {
     const files = Array.from(e.target.files);
     for (const file of files) {
-      const dataUrl = await fileToDataUrl(file);
+      let processedBlob = file;
+      // Detect HEIC: iPhones save as HEIC but often name the file .jpg/.jpeg.
+      // Sniff the file's actual bytes — the first 12 bytes contain "ftypheic",
+      // "ftypheix", "ftypmif1", or "ftypmsf1" for HEIF/HEIC containers.
+      const isHeic = await isHeicFile(file);
+      if (isHeic) {
+        try {
+          if (typeof heic2any === 'undefined') {
+            throw new Error('HEIC converter not loaded');
+          }
+          processedBlob = await heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+            quality: 0.88
+          });
+        } catch (err) {
+          console.error('HEIC conversion failed:', err);
+          alert(`Could not convert iPhone photo "${file.name}". Try changing your iPhone camera setting to "Most Compatible" instead of "High Efficiency", or save the photo as JPEG first.`);
+          continue;
+        }
+      }
+      const dataUrl = await fileToDataUrl(processedBlob);
       sheets.push({
         id: Date.now() + Math.random(),
         name: file.name.replace(/\.[^.]+$/, ''),
@@ -506,6 +533,20 @@
     e.target.value = '';
     document.getElementById('processAll').disabled = !cvReady || sheets.length === 0;
   });
+
+  async function isHeicFile(file) {
+    // Check the first 12 bytes for HEIF/HEIC magic numbers.
+    // HEIC files start with: 4 bytes (box length) + "ftyp" + brand
+    // Common brands: heic, heix, hevc, mif1, msf1
+    try {
+      const buf = await file.slice(0, 12).arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const sig = String.fromCharCode(...bytes.slice(4, 12));
+      return /^ftyp(heic|heix|hevc|hevx|mif1|msf1)/.test(sig);
+    } catch (e) {
+      return false;
+    }
+  }
 
   function fileToDataUrl(file) {
     return new Promise((res, rej) => {
@@ -651,29 +692,69 @@
     const gray = new cv.Mat();
     cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
 
-    // Binary threshold to isolate dark regions (markers + ink)
+    // Adaptive threshold: computes a local threshold per region instead of one
+    // global value. Critical for handling uneven lighting, shadows across the
+    // page, and copier scans where one side is darker than the other.
     const bin = new cv.Mat();
-    cv.threshold(gray, bin, 0, 255, cv.THRESH_BINARY_INV + cv.THRESH_OTSU);
+    cv.adaptiveThreshold(gray, bin, 255, cv.ADAPTIVE_THRESH_MEAN_C,
+                         cv.THRESH_BINARY_INV, 51, 15);
 
-    // Find contours
+    // Find contours with hierarchy so we can detect markers by their
+    // black-square-with-white-center signature (a distinguishing feature
+    // bubbles and letters don't have).
     const contours = new cv.MatVector();
     const hierarchy = new cv.Mat();
-    cv.findContours(bin, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    cv.findContours(bin, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
 
-    // Find the 4 largest roughly-square contours near the corners — these
-    // should be the fiducial markers. We look for contours with area in a
-    // reasonable range and aspect ratio close to 1.
     const candidates = [];
     const imageArea = w * h;
     for (let i = 0; i < contours.size(); i++) {
+      // hierarchy[i] = [next, prev, firstChild, parent]
+      // Skip any contour that's nested inside another (we want top-level only)
+      const parent = hierarchy.intPtr(0, i)[3];
+      if (parent !== -1) continue;
+
       const c = contours.get(i);
       const rect = cv.boundingRect(c);
       const area = rect.width * rect.height;
+      if (rect.width === 0 || rect.height === 0) { c.delete(); continue; }
       const ratio = rect.width / rect.height;
-      // Markers are ~0.4in on a letter page → roughly 1-4% of image dim
-      if (area > imageArea * 0.0005 && area < imageArea * 0.02
-          && ratio > 0.7 && ratio < 1.4) {
-        candidates.push({ rect, cx: rect.x + rect.width/2, cy: rect.y + rect.height/2, area });
+
+      // Size and squareness sanity check
+      if (area < imageArea * 0.001 || area > imageArea * 0.02 ||
+          ratio < 0.75 || ratio > 1.33) {
+        c.delete();
+        continue;
+      }
+
+      // Look for a centered child contour (the white inner square)
+      let childIdx = hierarchy.intPtr(0, i)[2];
+      let hasInner = false;
+      while (childIdx !== -1) {
+        const child = contours.get(childIdx);
+        const cr = cv.boundingRect(child);
+        const pcx = rect.x + rect.width / 2;
+        const pcy = rect.y + rect.height / 2;
+        const chcx = cr.x + cr.width / 2;
+        const chcy = cr.y + cr.height / 2;
+        const offX = Math.abs(chcx - pcx) / rect.width;
+        const offY = Math.abs(chcy - pcy) / rect.height;
+        const sizeRatio = (cr.width * cr.height) / area;
+        child.delete();
+        if (offX < 0.25 && offY < 0.25 && sizeRatio > 0.05 && sizeRatio < 0.45) {
+          hasInner = true;
+          break;
+        }
+        childIdx = hierarchy.intPtr(0, childIdx)[0]; // next sibling
+      }
+
+      if (hasInner) {
+        candidates.push({
+          rect,
+          cx: rect.x + rect.width/2,
+          cy: rect.y + rect.height/2,
+          area
+        });
       }
       c.delete();
     }
@@ -728,36 +809,32 @@
     const warped = new cv.Mat();
     cv.warpPerspective(gray, warped, M, new cv.Size(TW, TH));
 
-    // Sample each bubble. The printable sheet has 2 columns × 13/12 rows.
-    // Below are normalized coordinates of each bubble's CENTER in the warped page,
-    // calibrated to match the printable layout (which lives between the 4 markers).
-    // Page (between markers): 800 wide × 1000 tall.
-    // Content area starts ~14% from top, ends ~96%. Cols at ~16-46% and ~58-88%.
-    const answers = Array(TOTAL).fill(null);
-    const debugBubbles = []; // for review overlay
-    const bubbleRadius = 14;
+    // Bubble positions — empirically measured from real scanned answer sheets.
+    // After perspective-warping the page between the four corner markers into
+    // an 800×1000 canvas, the bubbles sit at these normalized positions:
+    //   - Both columns have rows at y = 0.271, 0.305, 0.338, ... (step 0.0334)
+    //   - Left column has 13 rows (questions 1-13), right column has 12 (14-25)
+    //   - Left column X positions: A=0.136, B=0.210, C=0.282, D=0.354, E=0.425
+    //   - Right column X positions: A=0.613, B=0.685, C=0.756, D=0.829, E=0.902
+    const LEFT_COL_X  = [0.136, 0.210, 0.282, 0.354, 0.425];
+    const RIGHT_COL_X = [0.613, 0.685, 0.756, 0.829, 0.902];
+    const ROW_TOP_PCT = 0.271;
+    const ROW_STEP_PCT = 0.0334;
+    const bubbleRadius = 13;
 
-    // Geometry calibration — these constants were tuned to the printable sheet.
-    // The content sits between the markers; markers are at the page corners.
-    const topPct = 0.215, bottomPctL = 0.96;     // left column 13 rows
-    const bottomPctR = (topPct + (bottomPctL - topPct) * 12 / 13); // right has 12 rows
-    const leftColStartPct = 0.20, leftColEndPct = 0.46;
-    const rightColStartPct = 0.59, rightColEndPct = 0.85;
+    const answers = Array(TOTAL).fill(null);
+    const debugBubbles = [];
 
     for (let q = 0; q < TOTAL; q++) {
       const isLeft = q < 13;
       const rowInCol = isLeft ? q : q - 13;
-      const rowsInCol = isLeft ? 13 : 12;
-      const rowYPct = topPct + ((rowInCol + 0.5) / rowsInCol) * ((isLeft ? bottomPctL : bottomPctR) - topPct);
-      const yPx = Math.round(rowYPct * TH);
-      const colStart = isLeft ? leftColStartPct : rightColStartPct;
-      const colEnd = isLeft ? leftColEndPct : rightColEndPct;
+      const yPx = Math.round((ROW_TOP_PCT + rowInCol * ROW_STEP_PCT) * TH);
+      const cols = isLeft ? LEFT_COL_X : RIGHT_COL_X;
 
       let darkest = -1, darkestIdx = -1, secondDarkest = -1;
       const fills = [];
       for (let ci = 0; ci < 5; ci++) {
-        const xPct = colStart + ((ci + 0.5) / 5) * (colEnd - colStart);
-        const xPx = Math.round(xPct * TW);
+        const xPx = Math.round(cols[ci] * TW);
         const fill = sampleBubbleDarkness(warped, xPx, yPx, bubbleRadius);
         fills.push({ xPx, yPx, fill, choice: CHOICES[ci] });
         if (fill > darkest) {
@@ -768,8 +845,10 @@
           secondDarkest = fill;
         }
       }
-      // Decide: must exceed threshold AND be meaningfully darker than runner-up.
-      if (darkest > darknessThreshold && (darkest - secondDarkest) > 0.08) {
+      // Decision rule: darkest bubble must be meaningfully above threshold
+      // AND meaningfully darker than the second-darkest. These tolerances
+      // were tuned to filter out the printed letter showing through.
+      if (darkest > darknessThreshold && (darkest - secondDarkest) > 0.10) {
         answers[q] = CHOICES[darkestIdx];
       }
       debugBubbles.push({ q, fills, picked: answers[q] });
