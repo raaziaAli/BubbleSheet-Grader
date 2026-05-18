@@ -326,9 +326,12 @@
       <input type="file" id="fileInput" accept="image/*" multiple capture="environment">
       <button id="processAll" class="primary" disabled>▶ Process All</button>
       <button onclick="clearQueue()">Clear Queue</button>
+      <label style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;cursor:pointer">
+        <input type="checkbox" id="debugMode"> Debug
+      </label>
       <div class="threshold">
         Darkness threshold:
-        <input type="range" id="threshold" min="0.25" max="0.65" step="0.02" value="0.40">
+        <input type="range" id="threshold" min="0.10" max="0.80" step="0.02" value="0.40">
         <span id="thresholdVal">0.40</span>
       </div>
     </div>
@@ -390,11 +393,28 @@
   // ============== STATE ==============
   const TOTAL = 25;
   const CHOICES = ['A','B','C','D','E'];
-  const key = Array(TOTAL).fill(null);
+  const KEY_STORAGE = 'apg-answer-key-v1';
+
+  // Load saved key from localStorage on startup; defaults to all nulls if none.
+  function loadKey() {
+    try {
+      const raw = localStorage.getItem(KEY_STORAGE);
+      if (!raw) return Array(TOTAL).fill(null);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length === TOTAL) return parsed;
+    } catch (e) { /* ignore */ }
+    return Array(TOTAL).fill(null);
+  }
+  function saveKey() {
+    try { localStorage.setItem(KEY_STORAGE, JSON.stringify(key)); } catch (e) {}
+  }
+
+  const key = loadKey();
   let sheets = []; // {id, name, imageData, detected:[letter|null], score, status}
   let cvReady = false;
   let reviewingId = null;
   let darknessThreshold = 0.40;
+  let debugMode = false;
 
   // ============== OPENCV LOAD ==============
   function onOpenCVReady() {
@@ -451,6 +471,8 @@
     const s = document.getElementById('keyStatus');
     s.textContent = `Answer key: ${set} of 25 questions set` + (set < 25 ? ' — fill all 25 before grading' : ' ✓ complete');
     s.className = 'keystatus ' + (set === 25 ? 'complete' : 'incomplete');
+    // Persist to localStorage so the key survives refresh and PWA cache clears
+    saveKey();
     // Regrade all sheets if key changed
     sheets.forEach(sh => { if (sh.detected) sh.score = computeScore(sh.detected); });
   }
@@ -556,6 +578,9 @@
   document.getElementById('threshold').addEventListener('input', e => {
     darknessThreshold = parseFloat(e.target.value);
     document.getElementById('thresholdVal').textContent = darknessThreshold.toFixed(2);
+  });
+  document.getElementById('debugMode').addEventListener('change', e => {
+    debugMode = e.target.checked;
   });
 
   // ============== PROCESS ALL ==============
@@ -732,9 +757,15 @@
       fills.forEach(f => {
         dctx.beginPath();
         dctx.arc(f.xPx, f.yPx, bubbleRadius, 0, 2*Math.PI);
-        dctx.strokeStyle = f.choice === picked ? '#3d7a4f' : '#888';
-        dctx.lineWidth = f.choice === picked ? 3 : 1;
+        dctx.strokeStyle = f.choice === picked ? '#3d7a4f' : (debugMode ? '#c8372d' : '#888');
+        dctx.lineWidth = f.choice === picked ? 3 : (debugMode ? 2 : 1);
         dctx.stroke();
+        if (debugMode) {
+          dctx.fillStyle = '#c8372d';
+          dctx.font = 'bold 11px monospace';
+          dctx.textAlign = 'center';
+          dctx.fillText(f.fill.toFixed(2), f.xPx, f.yPx + bubbleRadius + 12);
+        }
       });
     });
 
@@ -746,6 +777,7 @@
 
     // Attach debug to most recent sheet — caller will handle
     answers.__debug = debugUrl;
+    answers.__fills = debugBubbles.map(d => d.fills.map(f => f.fill));
     return answers;
   }
 
