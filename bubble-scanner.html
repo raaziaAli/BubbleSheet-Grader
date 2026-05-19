@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Algebra Placement — Batch Scanner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a1a1a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Grader">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="icon" href="icon-192.png" type="image/png">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1a1a1a;
+    --paper:#f4f1e8;
+    --paper-line:#e8e2d0;
+    --red:#c8372d;
+    --blue:#2d4a7c;
+    --green:#3d7a4f;
+    --muted:#7a7368;
+    --warn:#b8860b;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:'Fraunces',Georgia,serif;
+    background:var(--paper);
+    background-image:repeating-linear-gradient(0deg,transparent,transparent 31px,var(--paper-line) 31px,var(--paper-line) 32px);
+    color:var(--ink);
+    min-height:100vh;
+    padding:24px 16px 80px;
+  }
+  .sheet{
+    max-width:1000px;
+    margin:0 auto;
+    background:var(--paper);
+    border:2px solid var(--ink);
+    box-shadow:8px 8px 0 var(--ink);
+    padding:28px 36px;
+  }
+  header{
+    display:flex;
+    justify-content:space-between;
+    align-items:flex-end;
+    border-bottom:3px double var(--ink);
+    padding-bottom:14px;
+    margin-bottom:20px;
+    gap:20px;
+  }
+  h1{font-size:34px;font-weight:800;letter-spacing:-1px;line-height:1}
+  .sub{font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:2.5px;color:var(--muted);margin-top:4px}
+  .opencv-status{
+    font-family:'JetBrains Mono',monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:1.5px;
+    padding:4px 10px;
+    border:1px solid var(--ink);
+  }
+  .opencv-status.loading{background:#fff3c4;color:var(--warn)}
+  .opencv-status.ready{background:#d4ead4;color:var(--green)}
+  .opencv-status.error{background:#f4d4d0;color:var(--red)}
+
+  /* Tabs */
+  .tabs{
+    display:flex;
+    border:1px solid var(--ink);
+    margin-bottom:24px;
+  }
+  .tabs button{
+    flex:1;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:2px;
+    padding:12px 8px;
+    background:var(--paper);
+    border:none;
+    border-right:1px solid var(--ink);
+    cursor:pointer;
+    transition:all .15s;
+  }
+  .tabs button:last-child{border-right:none}
+  .tabs button.active{background:var(--ink);color:var(--paper)}
+  .tabs button .num{
+    display:inline-block;
+    width:18px;
+    height:18px;
+    line-height:18px;
+    border:1px solid currentColor;
+    border-radius:50%;
+    text-align:center;
+    margin-right:6px;
+    font-size:10px;
+  }
+
+  .panel{display:none}
+  .panel.active{display:block}
+
+  /* Key setup panel */
+  .grid{
+    display:grid;
+    grid-template-columns:repeat(2,1fr);
+    grid-template-rows:repeat(13,auto);
+    grid-auto-flow:column;
+    gap:0 40px;
+  }
+  .row{
+    display:grid;
+    grid-template-columns:36px repeat(5,1fr);
+    align-items:center;
+    padding:5px 0;
+    border-bottom:1px dotted #c4bca8;
+  }
+  .qnum{font-family:'JetBrains Mono',monospace;font-size:13px;font-weight:600;color:var(--muted)}
+  .bubble{display:flex;align-items:center;justify-content:center;cursor:pointer;height:32px}
+  .bubble .circle{
+    width:24px;height:24px;border-radius:50%;border:1.5px solid var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;
+    background:var(--paper);transition:all .12s;
+  }
+  .bubble:hover .circle{background:#e8e0c8}
+  .bubble.filled .circle{background:var(--ink);color:var(--paper)}
+
+  .keystatus{
+    margin:16px 0;padding:10px 14px;
+    background:#eee6d0;border:1px solid var(--ink);
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+  }
+  .keystatus.complete{background:#d4ead4}
+  .keystatus.incomplete{background:#fff3c4}
+
+  /* Scan panel */
+  .scan-controls{
+    display:flex;flex-wrap:wrap;gap:10px;margin-bottom:20px;
+    padding:14px;background:#eee6d0;border:1px solid var(--ink);
+  }
+  .scan-controls button, .scan-controls label{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    text-transform:uppercase;letter-spacing:1.5px;
+    padding:10px 16px;background:var(--paper);
+    border:1px solid var(--ink);cursor:pointer;
+    transition:all .15s;display:inline-block;
+  }
+  .scan-controls button.primary{background:var(--ink);color:var(--paper)}
+  .scan-controls button.primary:disabled{background:#999;cursor:not-allowed}
+  .scan-controls button:hover:not(:disabled){background:var(--ink);color:var(--paper)}
+  .scan-controls input[type=file]{display:none}
+
+  .threshold{
+    display:flex;align-items:center;gap:10px;
+    margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:11px;
+  }
+  .threshold input{width:120px}
+
+  .scan-queue{
+    display:grid;
+    grid-template-columns:repeat(auto-fill,minmax(180px,1fr));
+    gap:12px;
+    margin-bottom:20px;
+  }
+  .qcard{
+    border:1px solid var(--ink);
+    background:white;
+    padding:8px;
+    font-family:'JetBrains Mono',monospace;
+    font-size:11px;
+    position:relative;
+  }
+  .qcard canvas, .qcard img{
+    width:100%;height:180px;object-fit:contain;
+    background:#eee;display:block;margin-bottom:6px;
+  }
+  .qcard.processing{border-color:var(--warn);background:#fff8e0}
+  .qcard.done{border-color:var(--green)}
+  .qcard.failed{border-color:var(--red);background:#fce8e6}
+  .qcard .status{font-weight:600}
+  .qcard.processing .status{color:var(--warn)}
+  .qcard.done .status{color:var(--green)}
+  .qcard.failed .status{color:var(--red)}
+  .qcard input[type=text]{
+    width:100%;font-family:'JetBrains Mono',monospace;
+    font-size:11px;padding:3px;margin-top:4px;
+    border:1px solid #ccc;
+  }
+  .qcard .actions{display:flex;gap:4px;margin-top:4px}
+  .qcard .actions button{
+    flex:1;font-family:'JetBrains Mono',monospace;font-size:9px;
+    padding:3px;border:1px solid var(--ink);background:var(--paper);
+    cursor:pointer;
+  }
+  .qcard .actions button:hover{background:var(--ink);color:var(--paper)}
+  .qcard .score{
+    font-size:18px;font-weight:600;color:var(--ink);
+    margin-top:2px;
+  }
+
+  /* Review modal */
+  .modal{
+    display:none;position:fixed;inset:0;
+    background:rgba(0,0,0,0.7);z-index:100;
+    align-items:center;justify-content:center;padding:20px;
+  }
+  .modal.show{display:flex}
+  .modal-inner{
+    background:var(--paper);max-width:1000px;width:100%;max-height:95vh;
+    overflow:auto;border:2px solid var(--ink);padding:20px;
+  }
+  .modal-inner h2{font-size:22px;margin-bottom:12px}
+  .modal-inner canvas{max-width:100%;border:1px solid var(--ink)}
+  .modal-close{
+    float:right;font-family:'JetBrains Mono',monospace;
+    padding:6px 12px;border:1px solid var(--ink);background:var(--paper);
+    cursor:pointer;text-transform:uppercase;font-size:11px;
+  }
+  .review-grid{
+    display:grid;grid-template-columns:2fr 1fr;gap:16px;margin-top:12px;
+  }
+  .review-answers{
+    font-family:'JetBrains Mono',monospace;font-size:11px;
+    border:1px solid var(--ink);padding:10px;background:white;
+    max-height:500px;overflow-y:auto;
+  }
+  .review-row{
+    display:grid;grid-template-columns:30px repeat(5,1fr) 30px;
+    gap:2px;margin-bottom:4px;align-items:center;
+  }
+  .review-row .rb{
+    text-align:center;padding:3px;border:1px solid #ccc;
+    cursor:pointer;font-size:10px;
+  }
+  .review-row .rb.selected{background:var(--ink);color:var(--paper)}
+  .review-row .rb.correct{background:var(--green);color:white;border-color:var(--green)}
+  .review-row .rb.wrong{background:var(--red);color:white;border-color:var(--red)}
+  .review-row .mark{font-weight:600;text-align:center}
+  .review-row .mark.ok{color:var(--green)}
+  .review-row .mark.bad{color:var(--red)}
+
+  /* Results panel */
+  .results-table{
+    width:100%;border-collapse:collapse;
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+    background:white;border:1px solid var(--ink);
+  }
+  .results-table th, .results-table td{
+    padding:8px 12px;text-align:left;border-bottom:1px solid #ddd;
+  }
+  .results-table th{
+    background:var(--ink);color:var(--paper);
+    text-transform:uppercase;letter-spacing:1px;font-size:10px;
+  }
+  .results-table tr:hover{background:#f8f3e0}
+  .results-table .pct{font-weight:600}
+  .results-table .grade-A{color:var(--green)}
+  .results-table .grade-F{color:var(--red)}
+
+  .summary-bar{
+    display:flex;gap:20px;flex-wrap:wrap;
+    margin:16px 0;padding:14px;
+    background:#eee6d0;border:1px solid var(--ink);
+    font-family:'JetBrains Mono',monospace;font-size:12px;
+  }
+  .summary-bar .stat strong{
+    display:block;font-family:'Fraunces',serif;
+    font-size:24px;font-weight:800;
+  }
+
+  .empty-state{
+    text-align:center;padding:40px 20px;
+    color:var(--muted);font-style:italic;
+  }
+
+  /* Hidden processing canvas */
+  #processCanvas{display:none}
+
+  @media (max-width:680px){
+    .sheet{padding:20px 16px}
+    h1{font-size:24px}
+    .grid{grid-template-columns:1fr;grid-template-rows:none;grid-auto-flow:row}
+    .tabs button{font-size:9px;padding:10px 4px}
+    .review-grid{grid-template-columns:1fr}
+  }
+</style>
+</head>
+<body>
+
+<div class="sheet">
+  <header>
+    <div>
+      <h1>BATCH SCANNER</h1>
+      <div class="sub">Algebra Placement · 25 Questions · Camera Grading</div>
+    </div>
+    <div id="opencvStatus" class="opencv-status loading">Loading OpenCV…</div>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" data-panel="key"><span class="num">1</span>Answer Key</button>
+    <button class="tab-btn" data-panel="scan"><span class="num">2</span>Scan Sheets</button>
+    <button class="tab-btn" data-panel="results"><span class="num">3</span>Results</button>
+  </div>
+
+  <!-- PANEL 1: KEY -->
+  <div class="panel active" id="panel-key">
+    <p style="margin-bottom:14px;font-size:14px">
+      Fill in the correct answer for each of the 25 questions. This is the master key — scanned sheets are graded against it.
+    </p>
+    <div class="grid" id="keyGrid"></div>
+    <div class="keystatus" id="keyStatus">Answer key: 0 of 25 questions set</div>
+    <button onclick="clearKey()" style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:8px 14px;border:1px solid var(--ink);background:var(--paper);cursor:pointer;text-transform:uppercase">Clear Key</button>
+  </div>
+
+  <!-- PANEL 2: SCAN -->
+  <div class="panel" id="panel-scan">
+    <p style="margin-bottom:14px;font-size:14px">
+      Upload photos of completed answer sheets. The scanner detects the four corner markers, flattens the page, and reads each bubble. Tap any sheet to review and fix mistakes.
+    </p>
+    <div class="scan-controls">
+      <label for="fileInput" class="primary" style="background:var(--ink);color:var(--paper)">
+        📷 Add Photos
+      </label>
+      <input type="file" id="fileInput" accept="image/*" multiple capture="environment">
+      <button id="processAll" class="primary" disabled>▶ Process All</button>
+      <button onclick="clearQueue()">Clear Queue</button>
+      <label style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase;cursor:pointer">
+        <input type="checkbox" id="debugMode"> Debug
+      </label>
+      <div class="threshold">
+        Darkness threshold:
+        <input type="range" id="threshold" min="0.10" max="0.80" step="0.02" value="0.30">
+        <span id="thresholdVal">0.30</span>
+      </div>
+    </div>
+    <div class="scan-queue" id="scanQueue">
+      <div class="empty-state" style="grid-column:1/-1">No photos yet. Tap "Add Photos" to start.</div>
+    </div>
+  </div>
+
+  <!-- PANEL 3: RESULTS -->
+  <div class="panel" id="panel-results">
+    <div class="summary-bar" id="summaryBar">
+      <div class="stat"><strong id="statCount">0</strong>students graded</div>
+      <div class="stat"><strong id="statAvg">—</strong>class average</div>
+      <div class="stat"><strong id="statHigh">—</strong>highest score</div>
+      <div class="stat"><strong id="statLow">—</strong>lowest score</div>
+    </div>
+    <div style="margin-bottom:12px">
+      <button onclick="exportCSV()" style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:10px 16px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;text-transform:uppercase;letter-spacing:1.5px">⬇ Export CSV</button>
+    </div>
+    <table class="results-table">
+      <thead><tr>
+        <th>Student</th><th>Score</th><th>%</th><th>Grade</th>
+      </tr></thead>
+      <tbody id="resultsBody">
+        <tr><td colspan="4" class="empty-state">No graded sheets yet.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Review modal -->
+<div class="modal" id="reviewModal">
+  <div class="modal-inner">
+    <button class="modal-close" onclick="closeReview()">Close</button>
+    <h2>Review Scan</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:10px">
+      Click any bubble to override what the scanner detected. The student name field is editable.
+    </p>
+    <div style="margin-bottom:12px">
+      <label style="font-family:'JetBrains Mono',monospace;font-size:11px;text-transform:uppercase">Student name:</label>
+      <input type="text" id="reviewName" style="font-family:'JetBrains Mono',monospace;font-size:14px;padding:6px;width:300px;border:1px solid var(--ink);margin-left:8px">
+    </div>
+    <div class="review-grid">
+      <div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin-bottom:4px">Warped page · detected bubbles</div>
+        <canvas id="reviewCanvas"></canvas>
+        <div id="cornerDiagLabel" style="font-family:'JetBrains Mono',monospace;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;color:var(--muted);margin:14px 0 4px;display:none">Original photo · what was picked as corners (TL/TR/BL/BR)</div>
+        <canvas id="cornerDiagCanvas" style="display:none;max-width:100%;border:1px solid var(--ink)"></canvas>
+      </div>
+      <div class="review-answers" id="reviewAnswers"></div>
+    </div>
+    <div style="margin-top:16px;display:flex;gap:10px">
+      <button onclick="saveReview()" style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:10px 16px;border:1px solid var(--ink);background:var(--ink);color:var(--paper);cursor:pointer;text-transform:uppercase">Save & Close</button>
+      <button onclick="deleteSheet()" style="font-family:'JetBrains Mono',monospace;font-size:11px;padding:10px 16px;border:1px solid var(--red);background:var(--paper);color:var(--red);cursor:pointer;text-transform:uppercase">Delete Sheet</button>
+    </div>
+  </div>
+</div>
+
+<canvas id="processCanvas"></canvas>
+
+<!-- heic2any: converts iPhone HEIC photos to JPEG in the browser.
+     iPhones save photos as HEIC but name them .jpg/.jpeg — the browser
+     can't decode HEIC natively, so without this library, iPhone uploads
+     silently fail. -->
+<script src="https://cdn.jsdelivr.net/npm/heic2any@0.0.4/dist/heic2any.min.js"></script>
+
+<script async src="https://docs.opencv.org/4.8.0/opencv.js" onload="onOpenCVReady()" onerror="onOpenCVError()"></script>
+
+<script>
+  // ============== STATE ==============
+  const TOTAL = 25;
+  const CHOICES = ['A','B','C','D','E'];
+  const KEY_STORAGE = 'apg-answer-key-v1';
+
+  // Load saved key from localStorage on startup; defaults to all nulls if none.
+  function loadKey() {
+    try {
+      const raw = localStorage.getItem(KEY_STORAGE);
+      if (!raw) return Array(TOTAL).fill(null);
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length === TOTAL) return parsed;
+    } catch (e) { /* ignore */ }
+    return Array(TOTAL).fill(null);
+  }
+  function saveKey() {
+    try { localStorage.setItem(KEY_STORAGE, JSON.stringify(key)); } catch (e) {}
+  }
+
+  const key = loadKey();
+  let sheets = []; // {id, name, imageData, detected:[letter|null], score, status}
+  let cvReady = false;
+  let reviewingId = null;
+  let darknessThreshold = 0.30;
+  let debugMode = false;
+
+  // ============== OPENCV LOAD ==============
+  function onOpenCVReady() {
+    cv['onRuntimeInitialized'] = () => {
+      cvReady = true;
+      const s = document.getElementById('opencvStatus');
+      s.className = 'opencv-status ready';
+      s.textContent = 'OpenCV Ready';
+      document.getElementById('processAll').disabled = sheets.length === 0;
+    };
+  }
+  function onOpenCVError() {
+    const s = document.getElementById('opencvStatus');
+    s.className = 'opencv-status error';
+    s.textContent = 'OpenCV Failed';
+    alert('OpenCV failed to load. Check your internet connection and refresh.');
+  }
+
+  // ============== TAB NAVIGATION ==============
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('panel-' + btn.dataset.panel).classList.add('active');
+      if (btn.dataset.panel === 'results') renderResults();
+    });
+  });
+
+  // ============== KEY SETUP ==============
+  function buildKeyGrid() {
+    const grid = document.getElementById('keyGrid');
+    grid.innerHTML = '';
+    for (let i = 0; i < TOTAL; i++) {
+      const row = document.createElement('div');
+      row.className = 'row';
+      row.innerHTML = `<div class="qnum">${String(i+1).padStart(2,'0')}.</div>` +
+        CHOICES.map(c => `<div class="bubble" data-q="${i}" data-c="${c}"><div class="circle">${c}</div></div>`).join('');
+      grid.appendChild(row);
+    }
+    grid.addEventListener('click', e => {
+      const b = e.target.closest('.bubble');
+      if (!b) return;
+      const q = +b.dataset.q, c = b.dataset.c;
+      key[q] = key[q] === c ? null : c;
+      renderKey();
+    });
+  }
+  function renderKey() {
+    document.querySelectorAll('#keyGrid .bubble').forEach(b => {
+      b.classList.toggle('filled', key[+b.dataset.q] === b.dataset.c);
+    });
+    const set = key.filter(k => k !== null).length;
+    const s = document.getElementById('keyStatus');
+    s.textContent = `Answer key: ${set} of 25 questions set` + (set < 25 ? ' — fill all 25 before grading' : ' ✓ complete');
+    s.className = 'keystatus ' + (set === 25 ? 'complete' : 'incomplete');
+    // Persist to localStorage so the key survives refresh and PWA cache clears
+    saveKey();
+    // Regrade all sheets if key changed
+    sheets.forEach(sh => { if (sh.detected) sh.score = computeScore(sh.detected); });
+  }
+  function clearKey() {
+    if (confirm('Clear the entire answer key?')) {
+      key.fill(null);
+      renderKey();
+    }
+  }
+
+  // ============== FILE INPUT ==============
+  document.getElementById('fileInput').addEventListener('change', async (e) => {
+    const files = Array.from(e.target.files);
+    for (const file of files) {
+      let processedBlob = file;
+      // Detect HEIC: iPhones save as HEIC but often name the file .jpg/.jpeg.
+      // Sniff the file's actual bytes — the first 12 bytes contain "ftypheic",
+      // "ftypheix", "ftypmif1", or "ftypmsf1" for HEIF/HEIC containers.
+      const isHeic = await isHeicFile(file);
+      if (isHeic) {
+        try {
+          if (typeof heic2any === 'undefined') {
+            throw new Error('HEIC converter not loaded');
+          }
+          processedBlob = await heic2any({
+            blob: file,
+            toType: 'image/jpeg',
+            quality: 0.88
+          });
+        } catch (err) {
+          console.error('HEIC conversion failed:', err);
+          alert(`Could not convert iPhone photo "${file.name}". Try changing your iPhone camera setting to "Most Compatible" instead of "High Efficiency", or save the photo as JPEG first.`);
+          continue;
+        }
+      }
+      const dataUrl = await fileToDataUrl(processedBlob);
+      sheets.push({
+        id: Date.now() + Math.random(),
+        name: file.name.replace(/\.[^.]+$/, ''),
+        imageData: dataUrl,
+        detected: null,
+        score: null,
+        status: 'pending'
+      });
+    }
+    renderQueue();
+    e.target.value = '';
+    document.getElementById('processAll').disabled = !cvReady || sheets.length === 0;
+  });
+
+  async function isHeicFile(file) {
+    // Check the first 12 bytes for HEIF/HEIC magic numbers.
+    // HEIC files start with: 4 bytes (box length) + "ftyp" + brand
+    // Common brands: heic, heix, hevc, mif1, msf1
+    try {
+      const buf = await file.slice(0, 12).arrayBuffer();
+      const bytes = new Uint8Array(buf);
+      const sig = String.fromCharCode(...bytes.slice(4, 12));
+      return /^ftyp(heic|heix|hevc|hevx|mif1|msf1)/.test(sig);
+    } catch (e) {
+      return false;
+    }
+  }
+
+  function fileToDataUrl(file) {
+    return new Promise((res, rej) => {
+      const r = new FileReader();
+      r.onload = () => res(r.result);
+      r.onerror = rej;
+      r.readAsDataURL(file);
+    });
+  }
+
+  function clearQueue() {
+    if (sheets.length && !confirm('Clear all scanned sheets? Results will be lost.')) return;
+    sheets = [];
+    renderQueue();
+    document.getElementById('processAll').disabled = true;
+  }
+
+  function renderQueue() {
+    const q = document.getElementById('scanQueue');
+    if (sheets.length === 0) {
+      q.innerHTML = '<div class="empty-state" style="grid-column:1/-1">No photos yet. Tap "Add Photos" to start.</div>';
+      return;
+    }
+    q.innerHTML = '';
+    sheets.forEach(sh => {
+      const card = document.createElement('div');
+      card.className = 'qcard ' + sh.status;
+      const scoreHtml = sh.score !== null
+        ? `<div class="score">${sh.score.correct}/25 · ${sh.score.pct}%</div>`
+        : '';
+      card.innerHTML = `
+        <img src="${sh.imageData}" alt="">
+        <input type="text" value="${sh.name}" data-id="${sh.id}" class="name-input">
+        <div class="status">${statusLabel(sh.status)}</div>
+        ${scoreHtml}
+        <div class="actions">
+          <button data-id="${sh.id}" data-action="review">Review</button>
+          <button data-id="${sh.id}" data-action="delete">Delete</button>
+        </div>
+      `;
+      q.appendChild(card);
+    });
+    q.querySelectorAll('.name-input').forEach(inp => {
+      inp.addEventListener('change', e => {
+        const sh = sheets.find(s => s.id == e.target.dataset.id);
+        if (sh) sh.name = e.target.value;
+      });
+    });
+    q.querySelectorAll('.actions button').forEach(btn => {
+      btn.addEventListener('click', e => {
+        const id = e.target.dataset.id;
+        const sh = sheets.find(s => s.id == id);
+        if (!sh) return;
+        if (e.target.dataset.action === 'review') openReview(sh);
+        else if (e.target.dataset.action === 'delete') {
+          if (confirm('Delete this sheet?')) {
+            sheets = sheets.filter(s => s.id != id);
+            renderQueue();
+          }
+        }
+      });
+    });
+  }
+
+  function statusLabel(s) {
+    return {
+      pending: 'Pending',
+      processing: 'Processing…',
+      done: '✓ Graded',
+      failed: '✗ Failed — review manually'
+    }[s] || s;
+  }
+
+  // ============== THRESHOLD CONTROL ==============
+  document.getElementById('threshold').addEventListener('input', e => {
+    darknessThreshold = parseFloat(e.target.value);
+    document.getElementById('thresholdVal').textContent = darknessThreshold.toFixed(2);
+  });
+  document.getElementById('debugMode').addEventListener('change', e => {
+    debugMode = e.target.checked;
+  });
+
+  // ============== PROCESS ALL ==============
+  document.getElementById('processAll').addEventListener('click', async () => {
+    if (key.filter(k => k !== null).length < 25) {
+      if (!confirm('Answer key is incomplete. Continue anyway? Unanswered key questions will be skipped.')) return;
+    }
+    const btn = document.getElementById('processAll');
+    btn.disabled = true;
+    btn.textContent = 'Processing…';
+    for (const sh of sheets) {
+      if (sh.status === 'done') continue;
+      sh.status = 'processing';
+      renderQueue();
+      await new Promise(r => setTimeout(r, 50)); // yield to UI
+      try {
+        const result = await processSheet(sh.imageData);
+        sh.detected = result.answers;
+        sh.score = computeScore(sh.detected);
+        sh.status = 'done';
+      } catch (err) {
+        console.error('Process error:', err);
+        sh.detected = Array(TOTAL).fill(null);
+        sh.status = 'failed';
+      }
+      renderQueue();
+    }
+    btn.disabled = false;
+    btn.textContent = '▶ Process All';
+  });
+
+  // ============== CORE PIPELINE ==============
+  async function processSheet(dataUrl) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const answers = scanImage(img);
+          resolve({ answers });
+        } catch (e) { reject(e); }
+      };
+      img.onerror = reject;
+      img.src = dataUrl;
+    });
+  }
+
+  // Detect the four corner markers, warp to a known coordinate system,
+  // then sample each bubble's average darkness.
+  function scanImage(img) {
+    // Downscale large photos to keep processing fast
+    const maxDim = 1400;
+    let w = img.width, h = img.height;
+    if (Math.max(w, h) > maxDim) {
+      const s = maxDim / Math.max(w, h);
+      w = Math.round(w * s); h = Math.round(h * s);
+    }
+    const canvas = document.getElementById('processCanvas');
+    canvas.width = w; canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(img, 0, 0, w, h);
+
+    const src = cv.imread(canvas);
+    const gray = new cv.Mat();
+    cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+    // Adaptive threshold: computes a local threshold per region instead of one
+    // global value. Critical for handling uneven lighting, shadows across the
+    // page, and copier scans where one side is darker than the other.
+    const bin = new cv.Mat();
+    cv.adaptiveThreshold(gray, bin, 255, cv.ADAPTIVE_THRESH_MEAN_C,
+                         cv.THRESH_BINARY_INV, 51, 15);
+
+    // Find contours with hierarchy so we can detect markers by their
+    // black-square-with-white-center signature (a distinguishing feature
+    // bubbles and letters don't have).
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+    cv.findContours(bin, contours, hierarchy, cv.RETR_CCOMP, cv.CHAIN_APPROX_SIMPLE);
+
+    const candidates = [];
+    const imageArea = w * h;
+    for (let i = 0; i < contours.size(); i++) {
+      // hierarchy[i] = [next, prev, firstChild, parent]
+      // Skip any contour that's nested inside another (we want top-level only)
+      const parent = hierarchy.intPtr(0, i)[3];
+      if (parent !== -1) continue;
+
+      const c = contours.get(i);
+      const rect = cv.boundingRect(c);
+      const area = rect.width * rect.height;
+      if (rect.width === 0 || rect.height === 0) { c.delete(); continue; }
+      const ratio = rect.width / rect.height;
+
+      // Size and squareness sanity check
+      if (area < imageArea * 0.001 || area > imageArea * 0.02 ||
+          ratio < 0.75 || ratio > 1.33) {
+        c.delete();
+        continue;
+      }
+
+      // Look for a centered child contour (the white inner square)
+      let childIdx = hierarchy.intPtr(0, i)[2];
+      let hasInner = false;
+      while (childIdx !== -1) {
+        const child = contours.get(childIdx);
+        const cr = cv.boundingRect(child);
+        const pcx = rect.x + rect.width / 2;
+        const pcy = rect.y + rect.height / 2;
+        const chcx = cr.x + cr.width / 2;
+        const chcy = cr.y + cr.height / 2;
+        const offX = Math.abs(chcx - pcx) / rect.width;
+        const offY = Math.abs(chcy - pcy) / rect.height;
+        const sizeRatio = (cr.width * cr.height) / area;
+        child.delete();
+        if (offX < 0.25 && offY < 0.25 && sizeRatio > 0.05 && sizeRatio < 0.45) {
+          hasInner = true;
+          break;
+        }
+        childIdx = hierarchy.intPtr(0, childIdx)[0]; // next sibling
+      }
+
+      if (hasInner) {
+        candidates.push({
+          rect,
+          cx: rect.x + rect.width/2,
+          cy: rect.y + rect.height/2,
+          area
+        });
+      }
+      c.delete();
+    }
+    contours.delete(); hierarchy.delete();
+
+    if (candidates.length < 4) {
+      src.delete(); gray.delete(); bin.delete();
+      throw new Error('Could not find 4 corner markers. Got ' + candidates.length);
+    }
+
+    // Pick the 4 candidates closest to the actual image corners
+    const corners = pickCorners(candidates, w, h);
+    if (!corners) {
+      src.delete(); gray.delete(); bin.delete();
+      throw new Error('Marker arrangement does not match expected layout');
+    }
+
+    // === DIAGNOSTIC: draw what we detected onto the ORIGINAL photo ===
+    // This shows you exactly what the algorithm "saw" as the 4 corner markers.
+    // If these don't land on the four black squares, corner detection is broken.
+    const origCanvas = document.createElement('canvas');
+    origCanvas.width = w; origCanvas.height = h;
+    const octx = origCanvas.getContext('2d');
+    octx.drawImage(img, 0, 0, w, h);
+    // Outline all candidate contours in faint blue
+    octx.strokeStyle = 'rgba(45,74,124,0.5)';
+    octx.lineWidth = 2;
+    candidates.forEach(c => octx.strokeRect(c.rect.x, c.rect.y, c.rect.width, c.rect.height));
+    // Highlight the 4 chosen corners in red, with labels
+    octx.lineWidth = 4;
+    octx.strokeStyle = '#c8372d';
+    octx.fillStyle = '#c8372d';
+    octx.font = 'bold 20px monospace';
+    [['TL', corners.tl], ['TR', corners.tr], ['BL', corners.bl], ['BR', corners.br]].forEach(([label, c]) => {
+      octx.strokeRect(c.rect.x, c.rect.y, c.rect.width, c.rect.height);
+      octx.fillText(label, c.rect.x + c.rect.width + 4, c.rect.y + 18);
+    });
+    const cornerDiagUrl = origCanvas.toDataURL('image/jpeg', 0.85);
+
+    // Warp to a canonical 800x1000 page (matches our printable proportions roughly)
+    const TW = 800, TH = 1000;
+    const srcTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+      corners.tl.cx, corners.tl.cy,
+      corners.tr.cx, corners.tr.cy,
+      corners.br.cx, corners.br.cy,
+      corners.bl.cx, corners.bl.cy
+    ]);
+    const dstTri = cv.matFromArray(4, 1, cv.CV_32FC2, [
+      0, 0, TW, 0, TW, TH, 0, TH
+    ]);
+    const M = cv.getPerspectiveTransform(srcTri, dstTri);
+    const warped = new cv.Mat();
+    cv.warpPerspective(gray, warped, M, new cv.Size(TW, TH));
+
+    // Bubble positions — empirically measured from real scanned answer sheets.
+    // After perspective-warping the page between the four corner markers into
+    // an 800×1000 canvas, the bubbles sit at these normalized positions:
+    //   - Both columns have rows at y = 0.271, 0.305, 0.338, ... (step 0.0334)
+    //   - Left column has 13 rows (questions 1-13), right column has 12 (14-25)
+    //   - Left column X positions: A=0.136, B=0.210, C=0.282, D=0.354, E=0.425
+    //   - Right column X positions: A=0.613, B=0.685, C=0.756, D=0.829, E=0.902
+    const LEFT_COL_X  = [0.136, 0.210, 0.282, 0.354, 0.425];
+    const RIGHT_COL_X = [0.613, 0.685, 0.756, 0.829, 0.902];
+    const ROW_TOP_PCT = 0.271;
+    const ROW_STEP_PCT = 0.0334;
+    const bubbleRadius = 13;
+
+    const answers = Array(TOTAL).fill(null);
+    const debugBubbles = [];
+
+    for (let q = 0; q < TOTAL; q++) {
+      const isLeft = q < 13;
+      const rowInCol = isLeft ? q : q - 13;
+      const yPx = Math.round((ROW_TOP_PCT + rowInCol * ROW_STEP_PCT) * TH);
+      const cols = isLeft ? LEFT_COL_X : RIGHT_COL_X;
+
+      const fills = [];
+      for (let ci = 0; ci < 5; ci++) {
+        const xPx = Math.round(cols[ci] * TW);
+        const fill = sampleBubbleDarkness(warped, xPx, yPx, bubbleRadius);
+        fills.push({ xPx, yPx, fill, choice: CHOICES[ci] });
+      }
+
+      // Decision rule — RELATIVE not absolute:
+      // For each row, find the darkest bubble and compare it to the AVERAGE
+      // of the other four. A filled bubble is significantly darker than its
+      // four empty neighbors regardless of overall image quality, lighting,
+      // or scan resolution. This is much more robust than a hard threshold.
+      const sorted = [...fills].sort((a, b) => b.fill - a.fill);
+      const darkest = sorted[0];
+      const otherAvg = (sorted[1].fill + sorted[2].fill + sorted[3].fill + sorted[4].fill) / 4;
+      const gap = darkest.fill - otherAvg;
+
+      // Two conditions: enough absolute darkness to be ink (not blank paper),
+      // AND a meaningful gap above the row's empty-bubble baseline.
+      // Both bars are intentionally low — review mode lets you fix mistakes,
+      // and missing a real answer is worse than a stray detection.
+      if (darkest.fill > 0.20 && gap > 0.08) {
+        answers[q] = darkest.choice;
+      }
+      debugBubbles.push({ q, fills, picked: answers[q] });
+    }
+
+    // Build a debug image for review (warped page with bubble overlays)
+    const debugCanvas = document.createElement('canvas');
+    debugCanvas.width = TW; debugCanvas.height = TH;
+    const dctx = debugCanvas.getContext('2d');
+    cv.imshow(debugCanvas, warped);
+    debugBubbles.forEach(({ fills, picked }) => {
+      fills.forEach(f => {
+        dctx.beginPath();
+        dctx.arc(f.xPx, f.yPx, bubbleRadius, 0, 2*Math.PI);
+        dctx.strokeStyle = f.choice === picked ? '#3d7a4f' : (debugMode ? '#c8372d' : '#888');
+        dctx.lineWidth = f.choice === picked ? 3 : (debugMode ? 2 : 1);
+        dctx.stroke();
+        if (debugMode) {
+          dctx.fillStyle = '#c8372d';
+          dctx.font = 'bold 11px monospace';
+          dctx.textAlign = 'center';
+          dctx.fillText(f.fill.toFixed(2), f.xPx, f.yPx + bubbleRadius + 12);
+        }
+      });
+    });
+
+    // Save debug image on the sheet so the review modal can show it
+    const debugUrl = debugCanvas.toDataURL('image/jpeg', 0.85);
+
+    src.delete(); gray.delete(); bin.delete();
+    warped.delete(); srcTri.delete(); dstTri.delete(); M.delete();
+
+    // Attach debug to most recent sheet — caller will handle
+    answers.__debug = debugUrl;
+    answers.__cornerDiag = cornerDiagUrl;
+    answers.__fills = debugBubbles.map(d => d.fills.map(f => f.fill));
+    return answers;
+  }
+
+  // Sample average darkness in a circular region. Returns 0-1 where 1 is fully dark.
+  function sampleBubbleDarkness(grayMat, cx, cy, r) {
+    const data = grayMat.data;
+    const cols = grayMat.cols, rows = grayMat.rows;
+    let sum = 0, count = 0;
+    const r2 = r * r;
+    for (let dy = -r; dy <= r; dy++) {
+      for (let dx = -r; dx <= r; dx++) {
+        if (dx*dx + dy*dy > r2) continue;
+        const x = cx + dx, y = cy + dy;
+        if (x < 0 || y < 0 || x >= cols || y >= rows) continue;
+        sum += 255 - data[y * cols + x];
+        count++;
+      }
+    }
+    return count > 0 ? (sum / count) / 255 : 0;
+  }
+
+  // Identify which candidate is which corner by proximity to image corners.
+  function pickCorners(cands, w, h) {
+    function nearest(tx, ty) {
+      let best = null, bestD = Infinity;
+      for (const c of cands) {
+        const d = (c.cx - tx)*(c.cx - tx) + (c.cy - ty)*(c.cy - ty);
+        if (d < bestD) { bestD = d; best = c; }
+      }
+      return best;
+    }
+    const tl = nearest(0, 0);
+    const tr = nearest(w, 0);
+    const bl = nearest(0, h);
+    const br = nearest(w, h);
+    // Must be 4 distinct candidates
+    const set = new Set([tl, tr, bl, br]);
+    if (set.size < 4) return null;
+    return { tl, tr, bl, br };
+  }
+
+  // ============== SCORING ==============
+  function computeScore(answers) {
+    let correct = 0, graded = 0;
+    for (let i = 0; i < TOTAL; i++) {
+      if (key[i] === null) continue;
+      graded++;
+      if (answers[i] === key[i]) correct++;
+    }
+    if (graded === 0) return { correct: 0, graded: 0, pct: 0, grade: '—' };
+    const pct = Math.round((correct / graded) * 100);
+    return { correct, graded, pct, grade: letterGrade(pct) };
+  }
+  function letterGrade(p) {
+    if (p >= 93) return 'A'; if (p >= 90) return 'A−';
+    if (p >= 87) return 'B+'; if (p >= 83) return 'B'; if (p >= 80) return 'B−';
+    if (p >= 77) return 'C+'; if (p >= 73) return 'C'; if (p >= 70) return 'C−';
+    if (p >= 67) return 'D+'; if (p >= 63) return 'D'; if (p >= 60) return 'D−';
+    return 'F';
+  }
+
+  // ============== REVIEW MODAL ==============
+  function openReview(sh) {
+    reviewingId = sh.id;
+    document.getElementById('reviewName').value = sh.name;
+    const canvas = document.getElementById('reviewCanvas');
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      canvas.width = img.width;
+      canvas.height = img.height;
+      ctx.drawImage(img, 0, 0);
+    };
+    img.src = (sh.detected && sh.detected.__debug) || sh.imageData;
+
+    // Show the corner-detection diagnostic in a second canvas if available
+    const diag = document.getElementById('cornerDiagCanvas');
+    if (sh.detected && sh.detected.__cornerDiag) {
+      const dimg = new Image();
+      dimg.onload = () => {
+        diag.width = dimg.width;
+        diag.height = dimg.height;
+        diag.getContext('2d').drawImage(dimg, 0, 0);
+        diag.style.display = 'block';
+        document.getElementById('cornerDiagLabel').style.display = 'block';
+      };
+      dimg.src = sh.detected.__cornerDiag;
+    } else {
+      diag.style.display = 'none';
+      document.getElementById('cornerDiagLabel').style.display = 'none';
+    }
+
+    renderReviewAnswers(sh);
+    document.getElementById('reviewModal').classList.add('show');
+  }
+  function renderReviewAnswers(sh) {
+    const box = document.getElementById('reviewAnswers');
+    box.innerHTML = '';
+    const detected = sh.detected || Array(TOTAL).fill(null);
+    for (let i = 0; i < TOTAL; i++) {
+      const row = document.createElement('div');
+      row.className = 'review-row';
+      const correctMark = key[i] === null ? '' : (detected[i] === key[i] ? '<span class="mark ok">✓</span>' : '<span class="mark bad">✗</span>');
+      row.innerHTML = `<div>${String(i+1).padStart(2,'0')}</div>` +
+        CHOICES.map(c => {
+          const sel = detected[i] === c;
+          const isCorrect = key[i] === c;
+          let cls = 'rb' + (sel ? ' selected' : '');
+          if (sel && key[i] !== null) {
+            cls = 'rb ' + (sel === (key[i] === c) ? 'correct' : 'wrong');
+          }
+          return `<div class="${cls}" data-q="${i}" data-c="${c}">${c}</div>`;
+        }).join('') + correctMark;
+      box.appendChild(row);
+    }
+    box.querySelectorAll('.rb').forEach(rb => {
+      rb.addEventListener('click', () => {
+        const q = +rb.dataset.q, c = rb.dataset.c;
+        const sh = sheets.find(s => s.id === reviewingId);
+        if (!sh.detected) sh.detected = Array(TOTAL).fill(null);
+        const dbg = sh.detected.__debug;
+        sh.detected[q] = sh.detected[q] === c ? null : c;
+        sh.detected.__debug = dbg;
+        sh.score = computeScore(sh.detected);
+        sh.status = 'done';
+        renderReviewAnswers(sh);
+      });
+    });
+  }
+  function saveReview() {
+    const sh = sheets.find(s => s.id === reviewingId);
+    if (sh) {
+      sh.name = document.getElementById('reviewName').value;
+      sh.score = computeScore(sh.detected || []);
+    }
+    closeReview();
+    renderQueue();
+  }
+  function deleteSheet() {
+    if (!confirm('Delete this sheet?')) return;
+    sheets = sheets.filter(s => s.id !== reviewingId);
+    closeReview();
+    renderQueue();
+  }
+  function closeReview() {
+    document.getElementById('reviewModal').classList.remove('show');
+    reviewingId = null;
+  }
+
+  // ============== RESULTS ==============
+  function renderResults() {
+    const tbody = document.getElementById('resultsBody');
+    const graded = sheets.filter(s => s.score && s.status === 'done');
+    if (graded.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No graded sheets yet.</td></tr>';
+      document.getElementById('statCount').textContent = '0';
+      document.getElementById('statAvg').textContent = '—';
+      document.getElementById('statHigh').textContent = '—';
+      document.getElementById('statLow').textContent = '—';
+      return;
+    }
+    tbody.innerHTML = graded.map(s => `
+      <tr>
+        <td>${escapeHtml(s.name)}</td>
+        <td>${s.score.correct} / ${s.score.graded}</td>
+        <td class="pct">${s.score.pct}%</td>
+        <td class="grade-${s.score.grade[0]}">${s.score.grade}</td>
+      </tr>
+    `).join('');
+    const pcts = graded.map(s => s.score.pct);
+    document.getElementById('statCount').textContent = graded.length;
+    document.getElementById('statAvg').textContent = Math.round(pcts.reduce((a,b)=>a+b,0)/pcts.length) + '%';
+    document.getElementById('statHigh').textContent = Math.max(...pcts) + '%';
+    document.getElementById('statLow').textContent = Math.min(...pcts) + '%';
+  }
+  function escapeHtml(s) {
+    return String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  }
+
+  function exportCSV() {
+    const graded = sheets.filter(s => s.score && s.status === 'done');
+    if (graded.length === 0) { alert('No graded sheets to export.'); return; }
+    const rows = [['Student','Correct','Total','Percent','Grade']];
+    graded.forEach(s => rows.push([s.name, s.score.correct, s.score.graded, s.score.pct, s.score.grade]));
+    const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+    const blob = new Blob([csv], {type:'text/csv'});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'algebra-placement-results.csv';
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // ============== INIT ==============
+  buildKeyGrid();
+  renderKey();
+
+  // Register service worker for offline support.
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(err => {
+        console.warn('Service worker registration failed:', err);
+      });
+    });
+  }
+</script>
+</body>
+</html>
