@@ -173,7 +173,7 @@
     position:relative;
   }
   .qcard canvas, .qcard img{
-    width:100%;height:140px;object-fit:cover;
+    width:100%;height:180px;object-fit:contain;
     background:#eee;display:block;margin-bottom:6px;
   }
   .qcard.processing{border-color:var(--warn);background:#fff8e0}
@@ -831,25 +831,29 @@
       const yPx = Math.round((ROW_TOP_PCT + rowInCol * ROW_STEP_PCT) * TH);
       const cols = isLeft ? LEFT_COL_X : RIGHT_COL_X;
 
-      let darkest = -1, darkestIdx = -1, secondDarkest = -1;
       const fills = [];
       for (let ci = 0; ci < 5; ci++) {
         const xPx = Math.round(cols[ci] * TW);
         const fill = sampleBubbleDarkness(warped, xPx, yPx, bubbleRadius);
         fills.push({ xPx, yPx, fill, choice: CHOICES[ci] });
-        if (fill > darkest) {
-          secondDarkest = darkest;
-          darkest = fill;
-          darkestIdx = ci;
-        } else if (fill > secondDarkest) {
-          secondDarkest = fill;
-        }
       }
-      // Decision rule: darkest bubble must be meaningfully above threshold
-      // AND meaningfully darker than the second-darkest. These tolerances
-      // were tuned to filter out the printed letter showing through.
-      if (darkest > darknessThreshold && (darkest - secondDarkest) > 0.10) {
-        answers[q] = CHOICES[darkestIdx];
+
+      // Decision rule — RELATIVE not absolute:
+      // For each row, find the darkest bubble and compare it to the AVERAGE
+      // of the other four. A filled bubble is significantly darker than its
+      // four empty neighbors regardless of overall image quality, lighting,
+      // or scan resolution. This is much more robust than a hard threshold.
+      const sorted = [...fills].sort((a, b) => b.fill - a.fill);
+      const darkest = sorted[0];
+      const otherAvg = (sorted[1].fill + sorted[2].fill + sorted[3].fill + sorted[4].fill) / 4;
+      const gap = darkest.fill - otherAvg;
+
+      // Two conditions: enough absolute darkness to be ink (not blank paper),
+      // AND a meaningful gap above the row's empty-bubble baseline.
+      // Both bars are intentionally low — review mode lets you fix mistakes,
+      // and missing a real answer is worse than a stray detection.
+      if (darkest.fill > 0.20 && gap > 0.08) {
+        answers[q] = darkest.choice;
       }
       debugBubbles.push({ q, fills, picked: answers[q] });
     }
